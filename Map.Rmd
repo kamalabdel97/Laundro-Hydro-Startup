@@ -1,0 +1,216 @@
+---
+title: "Laundro-Hydro Startup "
+author: "Kamal"
+date: "4/18/2019"
+output: html_document
+---
+Data, Packages Loading
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+library(sf)
+library(ggplot2)
+library(sp)
+library(htmlwidgets)
+
+#Laundromats
+Laundromats <- read.csv("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/GeocodeResults.csv")
+
+#Income
+NYCIncome <- read.csv("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Data/Median Incomes.csv")
+
+NYCIncome <- subset(NYCIncome, nchar(NYCIncome$Fips) == 3 & NYCIncome$Household.Type == "All Households" & NYCIncome$TimeFrame == "2017")
+
+#Population
+NYCPop <- read.csv("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Data/Population/TotalPopulation.csv")
+
+NYCPop <- subset(NYCPop, NYCPop$TimeFrame == "2017")
+
+#Shapefile
+NycCom <- read_sf("https://data.cityofnewyork.us/api/geospatial/yfnk-k7r4?method=export&format=GeoJSON")
+
+NycComPop <- merge(NycCom, NYCPop, by.x = "boro_cd", by.y = "Fips")
+
+NycComIncome <- merge(NycCom, NYCIncome, by.x = "boro_cd", by.y = "Fips")
+
+NycNTAs <- read_sf("https://data.cityofnewyork.us/api/geospatial/cpf4-rkhq?method=export&format=GeoJSON")
+
+NycNTAs <- subset(NycNTAs, NycNTAs$ntaname == "Williamsburg")
+
+```
+
+Data Fixing
+```{r include=FALSE}
+#Get rid of scientific notations
+options("scipen"=100, "digits"=4)
+
+#Converts coordinates of Laundromats to spatial coordinates
+Laundromats <- SpatialPointsDataFrame(coords = Laundromats[,c(6,7)], data = Laundromats, proj4string = CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+
+
+#Converts it to sf
+Laundromats <- sf::st_as_sf(Laundromats, coords = c("Longitude","Latitude"))
+```
+
+NYC Population Map
+```{r echo=FALSE}
+#Laudnromat rating
+Laundromats$Average.Rating.on.Yelp <- as.numeric(Laundromats$Average.Rating.on.Yelp)
+Laundromats$Average.Rating.on.Google <- as.numeric(Laundromats$Average.Rating.on.Google)
+
+#Laundromat Rating 
+Laundromats$Rating <- (Laundromats$Average.Rating.on.Yelp + Laundromats$Average.Rating.on.Google) / 2
+
+NycComPop$PopulationPerArea <- (as.numeric(NycComPop$Data)/as.numeric(NycComPop$shape_area)) * 10000000
+
+mid <- mean(Laundromats$Rating)
+
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCLaundromatRatings_Population.png", plot = 
+ggplot() + geom_sf(data = NycComPop, aes(fill = NycComPop$PopulationPerArea)) +
+geom_point(data = Laundromats, aes(Longitude, Latitude, color = Rating)) +
+scale_color_gradient2(midpoint = mid, low = "#B90000", mid = "white", high = "#046F0E") +
+scale_fill_continuous(low = "white", high = "#FF8900", name = "Population") +
+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        panel.background = element_rect(fill = "transparent"), # panel bg   
+        plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+        panel.grid.major.x =  element_blank(), # get rid of major grid 
+        panel.grid.minor.x = element_blank(), # get rid of minor grid
+        panel.grid.major.y =  element_blank(), # get rid of major grid 
+        panel.grid.minor.y = element_blank(), # get rid of minor grid
+        legend.background = element_rect(fill = "transparent"),
+        plot.title = element_text(hjust = 0.5)) +
+labs(title = "Population Across New York City", x = "", y = ""),
+        dpi = 300, units = "in", bg = "transparent")
+```
+
+NYC Income Map
+```{r}
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCIncomeLevels.png", 
+plot = ggplot() +
+geom_sf(data = NycComIncome, aes(fill = NycComIncome$Income)) +
+scale_fill_continuous(low = "white", high = "#048922", name = "Income") +
+geom_point(data = Laundromats, aes(Longitude, Latitude, color = Rating)) +
+scale_color_gradient2(midpoint = mid, low = "#B90000", mid = "white", high = "#046F0E") +
+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        panel.background = element_rect(fill = "transparent"), # panel bg   
+        plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+        panel.grid.major.x =  element_blank(), # get rid of major grid 
+        panel.grid.minor.x = element_blank(), # get rid of minor grid
+        panel.grid.major.y =  element_blank(), # get rid of major grid 
+        panel.grid.minor.y = element_blank(), # get rid of minor grid
+        legend.background = element_rect(fill = "transparent"),
+        plot.title = element_text(hjust = 0.5)) +
+labs(title = "Median Income Levels Across New York City"), 
+        dpi = 300, units = "in", bg = "transparent")
+```
+
+Williamsburg Population Locator Map
+```{r}
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCLaundromatRatings_PopulationZOOMED.png", 
+plot = ggplot() + geom_sf(data = NycComPop, aes(fill = NycComPop$PopulationPerArea)) +
+        coord_sf(xlim = c(-73.919,-73.979),  ylim = c(40.699, 40.74), expand = T) +
+        geom_point(data = Laundromats, aes(Longitude, Latitude, color = Rating)) +
+        scale_fill_continuous(low = "white", high = "#FF8900") +
+        scale_color_gradient2(midpoint = mid, low = "#B90000", mid = "white", high = "#046F0E")+
+        theme(axis.text=element_text(size=6),
+              axis.title.x=element_blank(),
+              axis.text.x=element_blank(),
+              axis.ticks.x=element_blank(),
+              axis.title.y=element_blank(),
+              axis.text.y =element_blank(),
+              axis.ticks.y=element_blank(),
+              panel.background = element_rect(fill = "transparent"), # panel bg   
+              plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+              panel.grid.major.x =  element_blank(), # get rid of major grid 
+              panel.grid.minor.x = element_blank(), # get rid of minor grid
+              panel.grid.major.y =  element_blank(), # get rid of major grid 
+              panel.grid.minor.y = element_blank(), # get rid of minor grid
+              legend.background = element_rect(fill = "transparent"),  #get rid of legend bg
+              legend.position="none")+
+        labs(x="", y="")
+                , dpi = 300, units = "in", bg = "transparent")
+
+        
+```
+
+Williamsburg Income Locator Map
+```{r}
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCIncomeLevelsZOOMED.png", 
+        plot = ggplot() + geom_sf(data = NycComIncome, aes(fill = NycComIncome$Income)) +
+        coord_sf(xlim = c(-73.919,-73.979),  ylim = c(40.699, 40.74), expand = T) +
+        geom_point(data = Laundromats, aes(Longitude, Latitude, color = Rating)) +
+        scale_color_gradient2(midpoint = mid, low = "#B90000", mid = "white", high = "#046F0E") +
+        scale_fill_continuous(low = "white", high = "#048922") +
+        theme(axis.text=element_text(size=6),
+              axis.title.x=element_blank(),
+              axis.text.x=element_blank(),
+              axis.ticks.x=element_blank(),
+              axis.title.y=element_blank(),
+              axis.text.y =element_blank(),
+              axis.ticks.y=element_blank(),
+              panel.background = element_rect(fill = "transparent"), # panel bg   
+              plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+              panel.grid.major.x =  element_blank(), # get rid of major grid 
+              panel.grid.minor.x = element_blank(), # get rid of minor grid
+              panel.grid.major.y =  element_blank(), # get rid of major grid 
+              panel.grid.minor.y = element_blank(), # get rid of minor grid
+              legend.background = element_rect(fill = "transparent"),  #get rid of legend bg
+              legend.position="none"), dpi = 300, units = "in", bg = "transparent")
+```
+
+Income Levels Bar
+```{r echo=FALSE}
+NycComIncome$Williamsburg <- ifelse(NycComPop$Location == "Williamsburg/Greenpoint", "Red", "Grey")
+
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCIncomeLevelsBars.png", 
+plot = ggplot(NYCIncome, aes(reorder(NYCIncome$Location, -NYCIncome$Income), NYCIncome$Income, fill = NycComIncome$Williamsburg)) + 
+scale_fill_manual(values = c("grey", "red"), name = "", labels = c("Rest of NYC", "Williamsburg")) +
+geom_col(width = .95) +
+theme(axis.text=element_text(size=6),
+        axis.text.x = element_text(angle = 45, hjust = 1, 
+        color = c(rep("grey", 13), "red", rep("grey", 45))),
+        legend.justification=c(0,1), 
+        legend.position=c(0.7, 1),
+        legend.key = element_blank(),
+        panel.background = element_rect(fill = "transparent"), # panel bg   
+        plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+        panel.grid.major = element_blank(), # get rid of major grid 
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        legend.background = element_rect(fill = "transparent"),
+        plot.title = element_text(hjust = 0.5)) +
+labs(title = "Median Income Levels Across New York City", x = "Location", y = "Income"), 
+dpi = 300, units = "in", bg = "transparent")
+```
+
+Population Bar
+```{r echo=FALSE}
+NycComPop$Williamsburg <- ifelse(NycComPop$Location == "Williamsburg/Greenpoint", "Red", "Grey")
+
+ggsave("/Users/kamal/Documents/GitHub/Laundro-Hydro Startup/Plots/NYCPopulationBars.png", plot = ggplot(NycComPop, aes(reorder(NycComPop$Location, NycComPop$PopulationPerArea), NycComPop$PopulationPerArea, fill = NycComPop$Williamsburg)) +
+        scale_fill_manual(values = c("grey", "red"), name = "", labels = c("Rest of NYC", "Williamsburg")) +
+        geom_col(width = .95) + 
+theme(axis.text=element_text(size=6),
+        axis.text.x = element_text(angle = 45, hjust = 1, color = c(rep("grey", 39), "red", rep("grey", 19))),
+        legend.justification=c(0,1), 
+        legend.position=c(0.05, 0.95),
+        legend.key = element_blank(),
+        panel.background = element_rect(fill = "transparent"), # panel bg   
+        plot.background = element_rect(fill = "transparent", color = NA), # plot bg  
+        panel.grid.major = element_blank(), # get rid of major grid 
+        panel.grid.minor = element_blank(), # get rid of minor grid
+        legend.background = element_rect(fill = "transparent"),
+        plot.title = element_text(hjust = 0.5)) + #get rid of legend bg
+        labs(title = "Population Per Square Area", x = "Location", y = "Population"), dpi = 300, units = "in", bg = "transparent")
+```
+
+
+
